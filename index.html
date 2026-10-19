@@ -1028,11 +1028,6 @@
     to{transform:translateX(calc(-1 * var(--marquee-shift, 50%)));}
   }
 
-  /* en celular los tratamientos largos pasan a dos líneas en vez de una píldora más ancha que la pantalla */
-  @media (max-width:680px){
-    .chip{max-width:240px;white-space:normal;}
-  }
-
   @media (prefers-reduced-motion:reduce){
     .marquee-wrap{overflow-x:auto;}
     .marquee-track{animation:none;}
@@ -1051,6 +1046,11 @@
     border:1px solid rgba(43,43,40,0.14);
     padding:8px 16px;
     border-radius:20px;
+  }
+
+  /* en celular los tratamientos largos pasan a dos líneas en vez de una píldora más ancha que la pantalla */
+  @media (max-width:680px){
+    .chip{max-width:240px;white-space:normal;}
   }
 
   .modal-cta{
