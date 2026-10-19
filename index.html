@@ -1006,24 +1006,44 @@
     border-bottom:1px solid var(--hairline);
   }
 
+  /* la tira se mueve siempre a la misma velocidad (la duración la calcula el script según el largo) */
   .marquee-track{
     display:flex;
-    gap:12px;
+    align-items:center;
     width:max-content;
-    animation:marquee 26s linear infinite;
+    animation:marquee var(--marquee-dur, 30s) linear infinite;
+    will-change:transform;
   }
 
-  .marquee-wrap:hover .marquee-track{
+  .marquee-wrap.is-paused .marquee-track{
     animation-play-state:paused;
+  }
+
+  @media (hover:hover){
+    .marquee-wrap:hover .marquee-track{animation-play-state:paused;}
   }
 
   @keyframes marquee{
     from{transform:translateX(0);}
-    to{transform:translateX(-50%);}
+    to{transform:translateX(calc(-1 * var(--marquee-shift, 50%)));}
+  }
+
+  /* en celular los tratamientos largos pasan a dos líneas en vez de una píldora más ancha que la pantalla */
+  @media (max-width:680px){
+    .chip{max-width:240px;white-space:normal;}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    .marquee-wrap{overflow-x:auto;}
+    .marquee-track{animation:none;}
   }
 
   .chip{
     flex:0 0 auto;
+    margin-right:12px;           /* margen (no gap) para que las copias midan exactamente lo mismo y el loop no salte */
+    white-space:nowrap;
+    text-align:center;
+    line-height:1.35;
     font-size:11.5px;
     letter-spacing:0.02em;
     color:var(--ink);
@@ -1031,7 +1051,6 @@
     border:1px solid rgba(43,43,40,0.14);
     padding:8px 16px;
     border-radius:20px;
-    white-space:nowrap;
   }
 
   .modal-cta{
@@ -1853,6 +1872,44 @@
 
   let currentArea = null;
   let currentIndex = 0;
+
+  /* ---------- TIRA DE TRATAMIENTOS ----------
+     Repite los tratamientos las veces necesarias para cubrir el ancho, la duplica para un loop sin cortes
+     y calcula la duración para que todas las áreas se muevan a la misma velocidad. */
+  const MARQUEE_SPEED = 32; // píxeles por segundo
+  const marqueeWrap = marqueeTrack.parentElement;
+
+  function setupMarquee(){
+    const chips = marqueeTrack.dataset.chips;
+    if (!chips) return;
+    marqueeTrack.style.animation = 'none';
+    marqueeTrack.innerHTML = chips;
+    const wrapW = marqueeWrap.clientWidth;
+    let setW = marqueeTrack.scrollWidth;
+    if (!wrapW || !setW) return;
+    let set = chips;
+    while (marqueeTrack.scrollWidth < wrapW + 40){ set += chips; marqueeTrack.innerHTML = set; }
+    const firstCount = marqueeTrack.children.length;
+    marqueeTrack.innerHTML = set + set;
+    // distancia exacta (con decimales) entre el inicio de la primera copia y el de la segunda
+    // (corregido por la escala de la animación de apertura del desplegable)
+    const scale = marqueeTrack.offsetWidth / marqueeTrack.getBoundingClientRect().width || 1;
+    setW = (marqueeTrack.children[firstCount].getBoundingClientRect().left - marqueeTrack.children[0].getBoundingClientRect().left) * scale;
+    marqueeTrack.style.setProperty('--marquee-shift', setW + 'px');
+    marqueeTrack.style.setProperty('--marquee-dur', (setW / MARQUEE_SPEED).toFixed(2) + 's');
+    void marqueeTrack.offsetWidth;       // reinicia la animación desde el principio
+    marqueeTrack.style.animation = '';
+  }
+
+  // en celular: se frena mientras el dedo está apoyado y sigue al soltar
+  marqueeWrap.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') marqueeWrap.classList.add('is-paused'); });
+  ['pointerup','pointercancel','pointerleave'].forEach(ev => marqueeWrap.addEventListener(ev, () => marqueeWrap.classList.remove('is-paused')));
+
+  let marqueeResizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(marqueeResizeTimer);
+    marqueeResizeTimer = setTimeout(() => { if (currentArea && modal.classList.contains('open')) setupMarquee(); }, 200);
+  });
   let autoTimer = null;
   let lockedScrollY = 0;
 
@@ -1960,9 +2017,8 @@
     // precarga las fotos del área (si las tiene) para que el cambio sea instantáneo
     preloadArea(key);
 
-    marqueeTrack.innerHTML = '';
-    const chipsHTML = data.treatments.map(t => `<span class="chip">${t}</span>`).join('');
-    marqueeTrack.innerHTML = chipsHTML + chipsHTML; // duplicado para loop continuo
+    marqueeTrack.dataset.chips = data.treatments.map(t => `<span class="chip">${t}</span>`).join('');
+    marqueeTrack.innerHTML = marqueeTrack.dataset.chips;
     marqueeTrack.parentElement.style.display = data.treatments.length ? '' : 'none';
 
     // el desplegable se muestra recién cuando la foto está decodificada (máx. 900 ms de espera),
@@ -1970,6 +2026,7 @@
     const reveal = () => {
       if (currentArea !== data) return;
       modal.classList.add('open');
+      setupMarquee();
       lockedScrollY = window.scrollY;
       startAutoAdvance();
     };
