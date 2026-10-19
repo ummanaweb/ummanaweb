@@ -782,6 +782,33 @@
     padding-right:30px;
   }
 
+  /* "ver más / ver menos" de la descripción del área (solo celular) */
+  .modal-intro.is-animating{overflow:hidden;transition:height .45s cubic-bezier(.22,.61,.36,1);}
+  .intro-more{
+    display:none;
+    align-self:flex-start;
+    margin-top:8px;
+    padding:4px 0;
+    font-size:12px;
+    font-weight:500;
+    letter-spacing:0.06em;
+    color:var(--ink);
+    border-bottom:1px solid rgba(43,43,40,0.35);
+    line-height:1.3;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .intro-more.is-visible{display:inline-block;}
+
+  @media (max-width:680px){
+    .modal-intro.is-clamped{
+      display:-webkit-box;
+      -webkit-box-orient:vertical;
+      -webkit-line-clamp:var(--intro-lines, 4);
+      line-clamp:var(--intro-lines, 4);
+      overflow:hidden;
+    }
+  }
+
   .modal-divider{
     display:flex;
     align-items:center;
@@ -1318,6 +1345,7 @@
     <div class="modal-head">
       <span class="modal-eyebrow" id="modalEyebrow"></span>
       <p class="modal-intro" id="modalIntro"></p>
+      <button class="intro-more" id="introMore" type="button" aria-expanded="false" aria-controls="modalIntro">ver más</button>
     </div>
 
     <div class="modal-divider"><span></span></div>
@@ -1851,6 +1879,51 @@
   const modalEyebrow = document.getElementById('modalEyebrow');
   const modalBioLabel = document.getElementById('modalBioLabel');
   const modalIntro = document.getElementById('modalIntro');
+  const introMore = document.getElementById('introMore');
+  const mobileQuery = window.matchMedia('(max-width:680px)');
+
+  /* En celular la descripción del área se muestra por la mitad (con "…") y se despliega con "ver más". */
+  function setupIntroClamp(){
+    modalIntro.classList.remove('is-clamped', 'is-animating');
+    modalIntro.style.height = '';
+    introMore.classList.remove('is-visible');
+    introMore.setAttribute('aria-expanded', 'false');
+    introMore.textContent = 'ver más';
+    if (!mobileQuery.matches) return;
+    const lineH = parseFloat(getComputedStyle(modalIntro).lineHeight) || 24;
+    const lines = Math.round(modalIntro.scrollHeight / lineH);
+    if (lines <= 5) return;                       // los textos cortos se muestran completos
+    modalIntro.style.setProperty('--intro-lines', Math.ceil(lines / 2));
+    modalIntro.classList.add('is-clamped');
+    introMore.classList.add('is-visible');
+  }
+
+  function toggleIntro(){
+    const expand = modalIntro.classList.contains('is-clamped');
+    const from = modalIntro.getBoundingClientRect().height;
+    modalIntro.classList.toggle('is-clamped', !expand);
+    const to = modalIntro.scrollHeight;
+    const target = expand ? to : modalIntro.getBoundingClientRect().height;
+    introMore.textContent = expand ? 'ver menos' : 'ver más';
+    introMore.setAttribute('aria-expanded', String(expand));
+    if (window.matchMedia('(prefers-reduced-motion:reduce)').matches) return;
+    // anima la altura entre el estado cortado y el completo
+    if (!expand) modalIntro.classList.remove('is-clamped');
+    modalIntro.style.height = from + 'px';
+    modalIntro.classList.add('is-animating');
+    void modalIntro.offsetHeight;
+    modalIntro.style.height = target + 'px';
+    const done = () => {
+      modalIntro.classList.remove('is-animating');
+      modalIntro.style.height = '';
+      if (!expand) modalIntro.classList.add('is-clamped');
+    };
+    modalIntro.addEventListener('transitionend', done, { once:true });
+    setTimeout(() => { if (modalIntro.classList.contains('is-animating')) done(); }, 600);
+  }
+
+  introMore.addEventListener('click', toggleIntro);
+  mobileQuery.addEventListener('change', () => { if (modal.classList.contains('open')) setupIntroClamp(); });
   const modalProfessionalRow = document.getElementById('modalProfessionalRow');
   const modalProfessional = document.getElementById('modalProfessional');
   const modalPhoto = document.getElementById('modalPhoto');
@@ -2026,6 +2099,7 @@
     const reveal = () => {
       if (currentArea !== data) return;
       modal.classList.add('open');
+      setupIntroClamp();
       setupMarquee();
       lockedScrollY = window.scrollY;
       startAutoAdvance();
